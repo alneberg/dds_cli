@@ -52,6 +52,7 @@ class User:
         # Authenticate user and get delivery JWT token
         self.token = self.__authenticate_user(password=password, project=project)
 
+    test
     # Private methods ######################### Private methods #
     def __authenticate_user(self, password, project):
         """Authenticates the username and password via a call to the API."""
