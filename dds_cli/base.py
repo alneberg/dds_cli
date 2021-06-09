@@ -114,9 +114,10 @@ class DDSBaseClass:
         return self
 
     def __exit__(self, exc_type, exc_value, tb, max_fileerrs: int = 40):
+
+        # Don't clean up if we hit an exception
         if exc_type is not None:
-            traceback.print_exception(exc_type, exc_value, tb)
-            return False  # uncomment to pass exception through
+            return False
 
         if self.method in ["put", "get"]:
             self.__printout_delivery_summary()
@@ -317,12 +318,10 @@ class DDSBaseClass:
 
         else:
             # Printout if no cancelled/failed files
-            console.print(f"\n{'Upload' if self.method == 'put' else 'Download'} completed!\n")
+            LOG.debug(f"\n{'Upload' if self.method == 'put' else 'Download'} completed!\n")
 
         if self.method == "get" and len(self.filehandler.data) > len(any_failed):
-            console.print(
-                f"Any downloaded files are located: {self.filehandler.local_destination}."
-            )
+            LOG.info(f"Any downloaded files are located: {self.filehandler.local_destination}.")
 
     def __collect_all_failed(self, sort: bool = True):
         """Put cancelled files from status in to failed dict and sort the output."""
