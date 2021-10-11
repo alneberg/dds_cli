@@ -47,7 +47,7 @@ class LocalFileHandler(fh.FileHandler):
             user_input=user_input, local_destination=temporary_destination, project=project
         )
 
-        # Remove duplicates and save all files for later use
+        # Remove duplicates and save all explicitly specified files and directories for later use
         all_files = set(self.data_list)
 
         # Remove non existent files
@@ -62,20 +62,73 @@ class LocalFileHandler(fh.FileHandler):
                 )
             )
 
-        # Get absolute paths for all data
-        self.data_list = [pathlib.Path(path).resolve() for path in self.data_list]
+        # TODO Check here whether a link target is contained within the data list
+
+        # For a link target check:
+        # 1. Is it pointing to any of the explicitly listed files
+        # 2. Is any of the explicitly listed directories a subpath of what it's pointing to
+
+        # Needed to recreate the symlink:
+        # 1. path (probably the same as files)
+        # 2. Target path
+        # 3. whether the target path is a directory or not (Windows compatibility)
 
         # No data -- cannot proceed
         if not self.data_list:
             dds_cli.utils.console.print("\n:warning: No data specified. :warning:\n")
             os._exit(1)
 
-        self.data, _ = self.__collect_file_info_local(all_paths=self.data_list)
+        # Get absolute paths for data.
+        self.data_list = [os.path.abspath(path) for path in self.data_list]
+        # self.data_list = [pathlib.Path(path).resolve() for path in self.data_list]
+
+        self.data, _ = self.__collect_file_info_local(
+            all_paths=self.data_list, original_source_list=self.data_list
+        )
         self.data_list = None
 
         LOG.debug("File info computed/collected")
 
     # Static methods ############## Static methods #
+    @staticmethod
+    def is_internal_link(path, original_source_list):
+        """A link is considered internal if and only if either of these are true:
+        1. It's target is a file or directory listed in the original source list
+        2. The absolute path of any of the directories in the original source list
+           is fully contained within the absolute path of the non-resolved link target
+
+        Any link pointing outside of the specified sources will be included as a regular file,
+        even if the target file as already been included by another link.
+
+        Links which targets are internal of the specified sources will be conserved as links
+        in the delivery.
+
+        Note that this can still cause a file to be uploaded multiple times if:
+            1. A link points to an "external" directory which in turn contains
+            links back "internally".
+            2. A link points to an "external" symlink which in turn (possibly through
+            multiple levels) links back "internally".
+            2. An "external" file has multiple links pointing to it from inside
+            the delivery.
+
+        """
+        # Sanity check
+        if not path.is_symlink():
+            return False
+
+        link_target = os.path.abspath(path.readlink())
+        if link_target in original_source_list:
+            # Link target is directly specified in the source
+            return True
+
+        for original_path in original_source_list:
+            if original_path.is_dir():
+                if os.path.abspath(original_path) in link_target.parents:
+                    # Link target is contained within a directory specified in the source
+                    return True
+
+        return False
+
     @staticmethod
     def generate_bucket_filepath(filename="", folder=pathlib.Path("")):
         """Generates filename and new path which the file will be
@@ -100,7 +153,9 @@ class LocalFileHandler(fh.FileHandler):
             os.umask(original_umask)
 
     # Private methods ############ Private methods #
-    def __collect_file_info_local(self, all_paths, folder=pathlib.Path(""), task_name=""):
+    def __collect_file_info_local(
+        self, all_paths, original_source_list, folder=pathlib.Path(""), task_name=""
+    ):
         """Get info on each file in each path specified."""
 
         file_info = dict()
@@ -109,7 +164,33 @@ class LocalFileHandler(fh.FileHandler):
             task_name = path.name if folder == pathlib.Path("") else task_name
             # Get info for all files
             # and feed back to same function for all folders
-            if path.is_file():
+            if self.is_internal_link(pathlib.Path(path), original_source_list):
+                # save info of link
+                is_compressed = False
+                path_processed = self.create_encrypted_name(
+                    raw_file=path,
+                    subpath=folder,
+                    no_compression=True,
+                )
+
+                file_info[str(folder / path.name)] = {
+                    "path_raw": path,
+                    "subpath": folder,
+                    "size_raw": path.stat().st_size,
+                    "compressed": is_compressed,
+                    "path_processed": path_processed,
+                    "size_processed": 0,
+                    "path_remote": self.generate_bucket_filepath(
+                        filename=path_processed.name, folder=folder
+                    ),
+                    "overwrite": False,
+                    "checksum": "",
+                }
+            elif path.is_file():
+                if path.is_symlink():
+                    LOG.warning(
+                        f"External link {path} -> {path.readlink()} detected. File will be uploaded."
+                    )
                 with fc.Compressor() as compressor:
                     is_compressed, error = compressor.is_compressed(file=path)
 
@@ -140,6 +221,7 @@ class LocalFileHandler(fh.FileHandler):
             elif path.is_dir():
                 content_info, _ = self.__collect_file_info_local(
                     all_paths=path.glob("*"),
+                    original_source_list=original_source_list,
                     folder=folder / pathlib.Path(path.name),
                 )
                 file_info.update({**content_info})
