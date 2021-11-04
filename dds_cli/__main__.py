@@ -44,16 +44,16 @@ LOG = logging.getLogger()
 ####################################################################################################
 
 # Print header to STDERR
-stderr = dds_cli.utils.console
-stderr.print(
-    "[green]     ︵",
-    "\n[green] ︵ (  )   ︵",
-    "\n[green](  ) ) (  (  )[/]   [bold]SciLifeLab Data Delivery System",
-    "\n[green] ︶  (  ) ) ([/]    [blue][link={0}]{0}[/link]".format(dds_cli.__url__),
-    f"\n[green]      ︶ (  )[/]    [dim]Version {dds_cli.__version__}",
-    "\n[green]          ︶\n",
-    highlight=False,
-)
+if "--non-interactive" not in sys.argv:
+    dds_cli.utils.console.print(
+        "[green]     ︵",
+        "\n[green] ︵ (  )   ︵",
+        "\n[green](  ) ) (  (  )[/]   [bold]SciLifeLab Data Delivery System",
+        "\n[green] ︶  (  ) ) ([/]    [blue][link={0}]{0}[/link]".format(dds_cli.__url__),
+        f"\n[green]      ︶ (  )[/]    [dim]Version {dds_cli.__version__}",
+        "\n[green]          ︶\n",
+        highlight=False,
+    )
 
 
 @click.group()
@@ -61,34 +61,40 @@ stderr.print(
     "-v", "--verbose", is_flag=True, default=False, help="Print verbose output to the console."
 )
 @click.option("-l", "--log-file", help="Save a verbose log to a file.", metavar="<filename>")
+@click.option("--non-interactive", is_flag=True, default=False, help="Run in non-interactive mode.")
 @click.version_option(version=dds_cli.__version__, prog_name=dds_cli.__title__)
 @click.pass_context
-def dds_main(ctx, verbose, log_file):
+def dds_main(ctx, verbose, log_file, non_interactive):
     """Main CLI command, sets up DDS info."""
 
     if "--help" not in sys.argv:
+        # Set the base logger to output DEBUG if verbose is set
+        LOG.setLevel(logging.DEBUG if verbose else logging.INFO)
 
-        # Set the base logger to output DEBUG
-        LOG.setLevel(logging.DEBUG)
-
-        # Set up logs to the console
-        LOG.addHandler(
-            rich.logging.RichHandler(
-                level=logging.DEBUG if verbose else logging.INFO,
-                console=dds_cli.utils.console,
-                show_time=False,
-                markup=True,
-                show_path=verbose,
-            )
+        # Logging formatter for non-rich output
+        logging_formatter = logging.Formatter(
+            "[%(asctime)s] %(name)-20s [%(levelname)-7s]  %(message)s"
         )
+        if non_interactive:
+            log_stderr = logging.StreamHandler(sys.stderr)
+            log_stderr.setFormatter(logging_formatter)
+            LOG.addHandler(log_stderr)
+        else:
+            # Set up logs to the console
+            LOG.addHandler(
+                rich.logging.RichHandler(
+                    level=logging.DEBUG if verbose else logging.INFO,
+                    console=dds_cli.utils.console,
+                    show_time=False,
+                    markup=True,
+                    show_path=verbose,
+                )
+            )
 
         # Set up logs to a file if we asked for one
         if log_file:
             log_fh = logging.FileHandler(log_file, encoding="utf-8")
-            log_fh.setLevel(logging.DEBUG)
-            log_fh.setFormatter(
-                logging.Formatter("[%(asctime)s] %(name)-20s [%(levelname)-7s]  %(message)s")
-            )
+            log_fh.setFormatter(logging_formatter)
             LOG.addHandler(log_fh)
 
         # Check that the config file exists
