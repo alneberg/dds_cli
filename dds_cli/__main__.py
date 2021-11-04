@@ -141,11 +141,11 @@ def dds_main(ctx, verbose, log_file):
     help="Type of account.",
 )
 @click.pass_obj
-def add_user(dds_info, username, config, email, role):
+def add_user(click_ctx, username, config, email, role):
     """Add user to DDS, sending an invitation email to that person."""
     # All exceptions caught within
     with dds_cli.account_adder.AccountAdder(
-        username=username, config=dds_info.get("CONFIG") if config is None else config
+        username=username, config=click_ctx.get("CONFIG") if config is None else config
     ) as inviter:
         inviter.add_user(email=email, role=role)
 
@@ -229,7 +229,7 @@ def add_user(dds_info, username, config, email, role):
 )
 @click.pass_obj
 def put(
-    dds_info,
+    click_ctx,
     config,
     username,
     project,
@@ -243,8 +243,8 @@ def put(
     """Processes and uploads specified files to the cloud."""
     try:
         dds_cli.data_putter.put(
-            dds_info,
-            dds_info.get("CONFIG") if config is None else config,
+            click_ctx,
+            click_ctx.get("CONFIG") if config is None else config,
             username,
             project,
             source,
@@ -306,7 +306,7 @@ def put(
     help="Display users associated with a project(Requires a project id)",
 )
 @click.pass_obj
-def ls(dds_info, project, folder, projects, size, username, config, usage, sort, tree, users):
+def ls(click_ctx, project, folder, projects, size, username, config, usage, sort, tree, users):
     """
     List your projects and project files.
 
@@ -323,7 +323,7 @@ def ls(dds_info, project, folder, projects, size, username, config, usage, sort,
                 project=project,
                 project_level=project is None or projects,
                 show_usage=usage,
-                config=dds_info["CONFIG"] if config is None else config,
+                config=click_ctx["CONFIG"] if config is None else config,
                 username=username,
             ) as lister:
                 projects = lister.list_projects(sort_by=sort)
@@ -354,7 +354,7 @@ def ls(dds_info, project, folder, projects, size, username, config, usage, sort,
             with dds_cli.data_lister.DataLister(
                 project=project,
                 project_level=project is None,
-                config=dds_info["CONFIG"] if config is None else config,
+                config=click_ctx["CONFIG"] if config is None else config,
                 username=username,
                 tree=tree,
             ) as lister:
@@ -437,7 +437,7 @@ def ls(dds_info, project, folder, projects, size, username, config, usage, sort,
     help="Path to file with user credentials, destination, etc.",
 )
 @click.pass_obj
-def rm(dds_info, proj_arg, project, username, rm_all, file, folder, config):
+def rm(click_ctx, proj_arg, project, username, rm_all, file, folder, config):
     """Delete the files within a project."""
 
     # One of proj_arg or project is required
@@ -471,7 +471,7 @@ def rm(dds_info, proj_arg, project, username, rm_all, file, folder, config):
         with dds_cli.data_remover.DataRemover(
             project=project,
             username=username,
-            config=dds_info["CONFIG"] if config is None else config,
+            config=click_ctx["CONFIG"] if config is None else config,
         ) as remover:
 
             if rm_all:
@@ -583,7 +583,7 @@ def rm(dds_info, proj_arg, project, username, rm_all, file, folder, config):
 )
 @click.pass_obj
 def get(
-    dds_info,
+    click_ctx,
     config,
     username,
     project,
@@ -607,7 +607,7 @@ def get(
     # Begin delivery
     with dds_cli.data_getter.DataGetter(
         username=username,
-        config=dds_info["CONFIG"] if config is None else config,
+        config=click_ctx["CONFIG"] if config is None else config,
         project=project,
         get_all=get_all,
         source=source,
@@ -731,14 +731,14 @@ def get(
     help="Indicate if the Project includes sensitive data",
 )
 @click.pass_obj
-def create(dds_info, config, username, title, description, principal_investigator, is_sensitive):
+def create(click_ctx, config, username, title, description, principal_investigator, is_sensitive):
     """
     Create a project.
     """
 
     try:
         with dds_cli.project_creator.ProjectCreator(
-            config=dds_info["CONFIG"] if config is None else config,
+            config=click_ctx["CONFIG"] if config is None else config,
             username=username,
         ) as creator:
             created, project_id, err = creator.create_project(
