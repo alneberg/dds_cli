@@ -110,6 +110,7 @@ def dds_main(ctx, verbose, log_file, non_interactive):
         # Create context object
         ctx.obj = {
             "CONFIG": config_file,
+            "NON_INTERACTIVE": non_interactive,
         }
 
 
@@ -151,7 +152,9 @@ def add_user(click_ctx, username, config, email, role):
     """Add user to DDS, sending an invitation email to that person."""
     # All exceptions caught within
     with dds_cli.account_adder.AccountAdder(
-        username=username, config=click_ctx.get("CONFIG") if config is None else config
+        username=username,
+        config=click_ctx.get("CONFIG") if config is None else config,
+        non_interactive=click_ctx.get("NON_INTERACTIVE", False),
     ) as inviter:
         inviter.add_user(email=email, role=role)
 

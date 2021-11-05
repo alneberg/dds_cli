@@ -55,8 +55,9 @@ class DDSBaseClass:
         project=None,
         dds_directory: pathlib.Path = None,
         method: str = None,
+        non_interactive: bool = False,
     ):
-
+        self.non_interactive = non_interactive
         # Get attempted operation e.g. put/ls/rm/get
         self.method = method
         if self.method not in DDS_METHODS:
@@ -144,18 +145,19 @@ class DDSBaseClass:
 
         # Username and project info is minimum required info
         if self.method in ["put", "get"] and not project:
-            dds_cli.utils.console.print(
-                "\n:warning: Data Delivery System project information is missing. :warning:\n"
+            raise exceptions.DDSCLIException(
+                message="Data Delivery System Project ID is required for this operation."
             )
-            os._exit(1)
 
         if not username:
             raise exceptions.MissingCredentialsException(missing="username")
 
         # Set password if missing
         if not password:
-            password = getpass.getpass()
-            # password = "password"  # TODO: REMOVE - ONLY FOR DEV
+            if self.non_interactive:
+                raise exceptions.MissingCredentialsException(missing="password")
+            else:
+                password = getpass.getpass()
 
         LOG.debug("User input verified.")
 
